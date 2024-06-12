@@ -1,0 +1,162 @@
+---
+output: word_document
+---
+
+```{r setup, warning=FALSE, message=FALSE, include=FALSE}
+# Load packages and set defaults for output of word document
+knitr::opts_chunk$set(dpi = 300, ft.align = "left")
+library(flextable)  # table1() for HTML, need flextable to convert to word 
+set_flextable_defaults(font.size = 12) # Change font size of tables
+library(tidyverse)  # importing data, and data cleaning functions
+library(here)       # here()
+library(table1)     # label(), table1()
+library(gtsummary)  # Put regression model into a table (Table 2)
+library(gt)         # Edit Table 2
+library(RColorBrewer) # color blind friendly graphs
+library(ggpubr)     # Combine individual plots into one big plot
+
+# Load data
+bp <- read_csv(here("Blood Pressure/Data/Diabetes.csv"), 
+                 col_types = cols('Blood Pressure' = col_factor(), 
+                                  Diagnosis = col_factor(),
+                                  ), # End of cols() 
+                 col_select = c('Blood Pressure', Diagnosis, Age
+                                ) # End of col_select()
+                 ) # End of here()
+```
+
+# Introduction
+
+Diabetes mellitus and hypertension are silent epidemics that shape the health narratives of approximately thirty four million people in the United States (Sowjanya; 2021). Diabetes, a persistent condition that disrupts glucose regulation in the body, presents in three primary forms: type 1, type 2, and gestational diabetes. Notably, hypertension accompanies diabetes in about fifty percent of affected individuals (Krzesinski; 2005). Specifically, a very high incidence in patients with type 2 diabetes has been observed (Guanghong; 2020). High blood pressure poses a risk for diabetes and is linked to both insulin resistance and impaired glucose metabolism, contributing to the development of diabetes. Furthermore, as individuals age, their blood vessels commonly undergo a reduction in elasticity, resulting in increased stiffness. This age-related change contributes to elevated blood pressure.
+
+Therefore, we are examining the hypothesis that individuals with high blood pressure have a greater likelihood of being diagnosed with diabetes mellitus compared to those with normal or low pressure. Considering the escalating global prevalence of these conditions, such knowledge on the relationship between blood pressure and diagnosis of diabetes has the potential to enhance the well-being of individuals impacted by offering more effective strategies for management.
+
+# Methods
+
+Our study is a secondary data analysis of the Diabetes Classification dataset retrieved from Kaggle.com. 
+
+## Study Design and Population
+
+This dataset includes clinical patient records and history. Participants include males and females between the ages of 12 through 75. For our research study, we included both genders; and all ages of the 128 participants. 
+
+## Data Analysis
+
+The diabetes and age variables were cross-tabulated by our blood pressure variable. Furthermore, the mean and median statistics were calculated in Table 1. Figure 1 and Figure 2 were generated with a density and bar plot to see the age of individuals with blood pressure status concurrent to the prevalence of diabetes by blood pressure status. We then modeled the relationship between blood pressure and diabetes status using a logistic regression model. Age was included as a covariate. We considered results statistically significant at the $\alpha$ = 0.05 level. 
+
+# Results
+
+There were n = 128 female and male whose clinical records were utilized in the analysis. Overall, a majority of the participants were in their early forties in the sample of records collected (see Table 1). The onset of diabetes varied among individuals classified under three blood pressure categories: high, normal, or low (see Figure 2). 
+
+```{r data cleaning, echo=FALSE}
+suppressWarnings({
+
+
+# Recode factors
+bp.table1 <- bp |>
+  mutate(
+    `Blood Pressure` = fct_recode(`Blood Pressure`, "High Blood Pressure" = "yes", "Normal Blood Pressue" = "no"),
+    Diagnosis = fct_recode(Diagnosis, "No" = "no", "Yes" = "yes")
+  )
+
+})
+```
+
+```{r table1, echo=FALSE}
+# Create labels for variables inside table 1
+label(bp.table1$`Blood Pressure`) <- "Blood Pressure"
+label(bp.table1$Diagnosis) <- "Diabetes"
+label(bp.table1$Age) <- "Age (years)"
+
+# Make title and footnote for table
+tab1.title <- "Table 1. Descriptive statistics"
+
+
+
+# Get descriptive statistics
+tbl1 <- table1(~ Diagnosis + Age | `Blood Pressure`, 
+               data = bp.table1, 
+               caption = tab1.title, 
+               )
+
+# Convert table1() object to a flextable
+tbl1.fit <- t1flex(tbl1)
+# Now, use following function to make sure contents fit page width
+set_table_properties(tbl1.fit, layout = "autofit")
+```
+
+*Figure 1. Age of participants by blood pressure status*
+```{r figure 1, echo=FALSE, fig.width=6, fig.height=3.5}
+# Age by exposure status
+fig.age <- bp.table1 |>
+  ggplot(aes(x = Age, fill = `Blood Pressure`)) +
+  geom_density(alpha = 0.3) +
+  theme_classic() +
+  labs(x = "Age (years)", y = "Density") +
+  facet_wrap(~`Blood Pressure`, scales = "free") +
+  scale_fill_brewer(palette = "Set2", name = "") +
+  theme(
+    text = element_text(size = 12),
+    axis.text = element_text(color = "black"),
+    legend.position = "top"
+  )
+print(fig.age)
+
+```
+
+*Figure 2. Prevalence of diabetes by blood pressure status*
+```{r figure 2, echo=FALSE, fig.width=6, fig.height=3.5}
+# Outcome by exposure status
+fig.diab <- bp.table1 |>
+  ggplot(aes(x = Diagnosis, fill = `Blood Pressure`)) +
+  geom_bar(position = "fill") +
+  theme_classic() +
+  labs(x = "", y = "Percentage") +
+  scale_y_continuous(breaks = seq(0, 1, by = 0.1)) +
+  scale_fill_brewer(palette = "Set2", name = "") +
+  theme(
+    text = element_text(size = 12),
+    axis.text = element_text(color = "black"),
+    legend.position = "top"
+  )
+
+print(fig.diab)
+```
+
+After adjusting for age, we found that high blood pressure was associated with diabetes. As individuals progress through different age groups, there is a noticeable upward trend in blood pressure levels, ranging from low to normal to high, as illustrated in Figure 1. The odds of being a diabetic among those with high blood pressure were 0.78 times the odds of those who had normal blood pressure after controlling for age (OR = 0.78; 95% CI = 0.29, 2.24, p-value \< 0.6). The odds of being a diabetic among those with low blood pressure were 2.14 times the odds of those who had normal blood pressure after controlling for age (OR = 2.14; 95% CI = 0.49, 9.46, p-value \< 0.3). The odds ratio of age was 0.98 (OR = 0.98; 95% CI = 0.95, 1.01, p-value \< 0.3).
+```{r model, echo=FALSE, message=FALSE}
+# Fit logistic regression model to the data
+# Fit logistic regression model
+bp.fit <- glm(Diagnosis ~ `Blood Pressure` + Age, 
+              family = binomial, 
+              data = bp.table1)
+
+# Create table2
+tbl_regression(bp.fit, 
+               intercept = TRUE, 
+               exponentiate = TRUE,
+               estimate_fun = partial(style_ratio, digits = 2)
+               ) |>
+  modify_caption("Table 2. Logistic Regression Results for N = 128 Females and Males") |>
+  bold_labels()
+
+```
+# Discussion
+Our results are in agreement with the body of literature where others have found that hypertension increases the risk of diabetes (Grossman; 2017). People with metabolic disorders including insulin resistance and diabetes have a high prevalence of hypertension (Guanghong; 2020). Elevated glucose has an impact on arterial stiffness due to the body's ability to control blood pressure. Both of these conditions can be a deadly combination for other diseases including cardiovascular disease, renal dysfunction and vision problems (Zhang; 2020).
+
+## Limitations
+The dataset used in our study presents limitations, particularly in its lack of information regarding the origin of patient records, the specific system from which the data was derived, and the age of the dataset. The absence of information about the study design poses challenges in determining causation, understanding temporal relationships, and discerning whether the observed cases are incident or prevalent. These details need to be more accurate in assessing the information's context and reliability. Additionally, there may be inherent biases within the dataset that influence the generalizability of our findings. Selection bias may arise from non-randomized participant selection or a dataset derived solely from a specific clinical setting, potentially leading to an overestimation of the odds ratio or towards the null value of 1. The random error may not pose a significant concern given that the sample size was relatively small. Lastly, potential confounding variables include medication use, socioeconomic status and genetic factors. Addressing these limitations is vital for a full understanding of the study's implications and to ensure the validity of our conclusions.
+
+# Conclusion
+Taking charge of hypertension and diabetes management falls on the individual, but employing a cohort study will be more appropriate to see the effect of blood pressure status within diabetic and non diabetic patients. This design helps control for confounding variables and ensures a more accurate evaluation of the intervention's impact. Additionally, the temporal relationship between if high blood pressure is a risk factor for the development of diabetes can be analyzed. Moreover, incidence rates of high blood pressure of individuals with and without diabetes can be calculated. Lastly, future research endeavors should focus on exploring innovative and personalized interventions, considering factors such as lifestyle modifications, medications, and emerging therapies. These studies should also emphasize the long-term effects and adherence patterns.
+
+\newpage
+# References
+Grossman, A., &amp; Grossman, E. (2017, January 6). Blood pressure control in type 2 diabetic patients. Cardiovascular diabetology. https://www.ncbi.nlm.nih.gov/pmc/articles/PMC5217560/ 
+
+Guanghong, J. (n.d.). Hypertension in diabetes: An update of basic mechanisms and clinical ... https://www.ahajournals.org/doi/10.1161/HYPERTENSIONAHA.121.17981 
+
+L, Krzesinksi. J. (n.d.). [hypertension and diabetes]. Revue medicale de Liege. https://pubmed.ncbi.nlm.nih.gov/16041861/
+
+Sowjanya, N. (n.d.). Hypertension in diabetes - endotext - NCBI bookshelf. https://www.ncbi.nlm.nih.gov/books/NBK279027/ 
+
+Zhang, Y., Nie, J., Zhang, Y., Li, J., Liang, M., Wang, G., Tian, J., Liu, C., Wang, B., Cui, Y., Wang, X., Huo, Y., Xu, X., Hou, F. F., &amp; Qin, X. (2020, August 18). Degree of blood pressure control and incident diabetes mellitus in Chinese adults with hypertension. Journal of the American Heart Association. https://www.ncbi.nlm.nih.gov/pmc/articles/PMC7660809/ 
